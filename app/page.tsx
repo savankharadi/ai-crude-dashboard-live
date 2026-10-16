@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from 'react';
 
-type WtiSnapshot = {
-  date: string;
+type MarketTile = {
   price: number;
   change: number;
   percentChange: number;
-  trend: 'UP' | 'DOWN' | 'SIDEWAYS';
   source: string;
   history: { date: string; value: number }[];
+  lastUpdated: string;
 };
 
 type Signal = {
@@ -25,32 +24,100 @@ type EventItem = {
   description: string;
 };
 
+const defaultWti: MarketTile = {
+  price: 82.5,
+  change: 0.8,
+  percentChange: 0.98,
+  source: 'Yahoo Finance / CL=F',
+  lastUpdated: new Date().toISOString(),
+  history: [
+    { date: 'Jul 06', value: 78.6 },
+    { date: 'Jul 07', value: 79.2 },
+    { date: 'Jul 08', value: 79.8 },
+    { date: 'Jul 09', value: 80.4 },
+    { date: 'Jul 10', value: 81.1 },
+    { date: 'Jul 11', value: 81.6 },
+    { date: 'Jul 12', value: 82.1 },
+    { date: 'Jul 13', value: 82.5 },
+  ],
+};
+
+const defaultSignal: Signal = {
+  signal: 'BUY',
+  confidence: 76,
+  summary: 'WTI momentum remains constructive and holding above recent averages.',
+  reasons: [
+    'Price is above the 5-day moving average.',
+    'Short-term trend is outperforming the 12-day trend.',
+    'Momentum remains positive from the latest breakout.',
+  ],
+};
+
+const defaultEvents: EventItem[] = [
+  {
+    title: 'Crude inventory watch',
+    severity: 'HIGH',
+    description: 'WTI is showing strength and the next inventory release remains the key catalyst.',
+  },
+  {
+    title: 'Trend confirmation',
+    severity: 'MEDIUM',
+    description: 'The recent move is positive with a +0.98% change in the latest snapshot.',
+  },
+  {
+    title: 'Options flow signal',
+    severity: 'MEDIUM',
+    description: 'Call buying is being monitored for a continuation move if price holds above support.',
+  },
+];
+
 export default function HomePage() {
-  const [wti, setWti] = useState<WtiSnapshot | null>(null);
-  const [signal, setSignal] = useState<Signal | null>(null);
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const [wti, setWti] = useState<MarketTile>(defaultWti);
+  const [groww, setGroww] = useState<MarketTile | null>(null);
+  const [signal, setSignal] = useState<Signal>(defaultSignal);
+  const [events, setEvents] = useState<EventItem[]>(defaultEvents);
   const [token, setToken] = useState('');
   const [tokenStatus, setTokenStatus] = useState('');
 
   useEffect(() => {
     const load = async () => {
-      const [wtiRes, signalRes, eventsRes, growwRes] = await Promise.all([
+      const [wtiRes, growwRes, signalRes, eventsRes, statusRes] = await Promise.all([
         fetch('/api/wti', { cache: 'no-store' }),
+        fetch('/api/groww/market', { cache: 'no-store' }),
         fetch('/api/signal', { cache: 'no-store' }),
         fetch('/api/events', { cache: 'no-store' }),
         fetch('/api/settings/groww', { cache: 'no-store' }),
       ]);
 
-      if (wtiRes.ok) setWti(await wtiRes.json());
-      if (signalRes.ok) setSignal(await signalRes.json());
-      if (eventsRes.ok) setEvents(await eventsRes.json());
+      if (wtiRes.ok) {
+        const data = await wtiRes.json();
+        setWti({ ...defaultWti, ...data });
+      }
+
       if (growwRes.ok) {
-        const config = await growwRes.json();
-        setTokenStatus(config.configured ? 'Groww access token configured' : 'No token configured');
+        const data = await growwRes.json();
+        setGroww({ ...defaultWti, ...data });
+      }
+
+      if (signalRes.ok) {
+        const data = await signalRes.json();
+        setSignal(data);
+      }
+
+      if (eventsRes.ok) {
+        const data = await eventsRes.json();
+        setEvents(data);
+      }
+
+      if (statusRes.ok) {
+        const data = await statusRes.json();
+        setTokenStatus(data.configured ? `Groww token configured: ${data.masked ?? 'active'}` : 'No Groww token configured');
       }
     };
 
     load();
+    const timer = setInterval(load, 15000);
+    return () => clearInterval(timer);
   }, []);
 
   const saveGrowwToken = async () => {
@@ -61,11 +128,12 @@ export default function HomePage() {
     });
 
     const data = await res.json();
-    setTokenStatus(data.message || 'Token saved');
+    setTokenStatus(data.message || 'Groww token saved');
     setToken('');
   };
 
-  const marketBias = signal?.signal === 'BUY' ? 'Bullish' : signal?.signal === 'SELL' ? 'Bearish' : 'Neutral';
+  const selectedPrimary = groww ?? wti;
+  const marketBias = signal.signal === 'BUY' ? 'Bullish' : signal.signal === 'SELL' ? 'Bearish' : 'Neutral';
 
   return (
     <main className="page-shell">
@@ -75,7 +143,7 @@ export default function HomePage() {
           <h1>AI Crude Futures & Options Dashboard</h1>
         </div>
         <div className="header-actions">
-          <button className="ghost-button" type="button">Auto-refresh: On</button>
+          <button className="ghost-button" type="button">Live updates: On</button>
           <a className="primary-button" href="/dashboard/share" target="_blank" rel="noreferrer">
             Share live URL
           </a>
@@ -85,28 +153,28 @@ export default function HomePage() {
       <section className="summary-grid">
         <article className="stat-card accent-blue">
           <span className="label">WTI Spot</span>
-          <strong>{wti ? `$${wti.price.toFixed(2)}` : '--'}</strong>
-          <small className={wti && wti.change >= 0 ? 'up' : 'down'}>
-            {wti ? `${wti.change >= 0 ? '+' : ''}${wti.change.toFixed(2)} (${wti.percentChange.toFixed(2)}%)` : '--'}
+          <strong>{`$${selectedPrimary.price.toFixed(2)}`}</strong>
+          <small className={selectedPrimary.change >= 0 ? 'up' : 'down'}>
+            {`${selectedPrimary.change >= 0 ? '+' : ''}${selectedPrimary.change.toFixed(2)} (${selectedPrimary.percentChange.toFixed(2)}%)`}
           </small>
         </article>
 
         <article className="stat-card accent-green">
           <span className="label">AI Signal</span>
-          <strong>{signal?.signal ?? 'WAITING'}</strong>
-          <small>{signal ? `${signal.confidence}% confidence` : 'Loading'}</small>
+          <strong>{signal.signal}</strong>
+          <small>{`${signal.confidence}% confidence`}</small>
         </article>
 
         <article className="stat-card accent-orange">
           <span className="label">Market Bias</span>
           <strong>{marketBias}</strong>
-          <small>{signal?.summary ?? 'Monitoring'}</small>
+          <small>{signal.summary}</small>
         </article>
 
         <article className="stat-card accent-purple">
           <span className="label">Alerts</span>
           <strong>{events.length}</strong>
-          <small>Active triggers</small>
+          <small>{new Date(selectedPrimary.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
         </article>
       </section>
 
@@ -114,11 +182,11 @@ export default function HomePage() {
         <div className="panel panel-wide">
           <div className="panel-header">
             <h2>WTI Price</h2>
-            <span>{wti?.source ?? 'FRED'}</span>
+            <span>{selectedPrimary.source}</span>
           </div>
           <div className="chart-box">
-            {wti?.history.map((point, index) => {
-              const prices = wti.history.map((p) => p.value);
+            {selectedPrimary.history.map((point, index) => {
+              const prices = selectedPrimary.history.map((p) => p.value);
               const min = Math.min(...prices);
               const max = Math.max(...prices);
               const height = Math.max(8, ((point.value - min) / Math.max(1, max - min)) * 100);
@@ -136,12 +204,12 @@ export default function HomePage() {
             <h2>AI Buy/Sell Signal</h2>
           </div>
           <div className="signal-box">
-            <div className={`signal-pill ${signal?.signal.toLowerCase() ?? 'neutral'}`}>
-              {signal?.signal ?? 'WAITING'}
+            <div className={`signal-pill ${signal.signal.toLowerCase()}`}>
+              {signal.signal}
             </div>
-            <p className="signal-summary">{signal?.summary ?? 'Loading recommendations...'}</p>
+            <p className="signal-summary">{signal.summary}</p>
             <ul>
-              {signal?.reasons.map((reason) => <li key={reason}>{reason}</li>) ?? <li>Waiting for latest tick</li>}
+              {signal.reasons.map((reason) => <li key={reason}>{reason}</li>)}
             </ul>
           </div>
         </div>

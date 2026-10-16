@@ -6,7 +6,7 @@ const DATA_DIR = path.join(process.cwd(), '.data');
 const TOKEN_FILE = path.join(DATA_DIR, 'groww-token.json');
 
 const getEncryptionKey = () => {
-  const secret = process.env.TOKEN_SECRET || 'dev-crude-dashboard-secret';
+  const secret = process.env.TOKEN_SECRET || 'dev-secret';
   return crypto.createHash('sha256').update(secret).digest();
 };
 
@@ -16,32 +16,30 @@ export async function saveGrowwToken(token: string) {
   const encrypted = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
 
   await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(
-    TOKEN_FILE,
-    JSON.stringify({ value: `${iv.toString('hex')}:${encrypted.toString('hex')}` }, null, 2),
-    'utf8'
-  );
+  await fs.writeFile(TOKEN_FILE, JSON.stringify({ value: `${iv.toString('hex')}:${encrypted.toString('hex')}` }, null, 2));
 }
 
-export async function getGrowwTokenStatus() {
+export async function getGrowwToken() {
   try {
     const raw = await fs.readFile(TOKEN_FILE, 'utf8');
     const parsed = JSON.parse(raw);
     const [ivHex, valueHex] = String(parsed.value || '').split(':');
-
-    if (!ivHex || !valueHex) {
-      return { configured: false, masked: null };
-    }
+    if (!ivHex || !valueHex) return null;
 
     const iv = Buffer.from(ivHex, 'hex');
     const encrypted = Buffer.from(valueHex, 'hex');
     const decipher = crypto.createDecipheriv('aes-256-cbc', getEncryptionKey(), iv);
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return decrypted.toString('utf8');
+  } catch (error) {
+    return null;
+  }
+}
 
-    return {
-      configured: true,
-      masked: `********${decrypted.toString('utf8').slice(-4)}`,
-    };
+export async function getGrowwTokenStatus() {
+  try {
+    const token = await getGrowwToken();
+    return token ? { configured: true, masked: `********${token.slice(-4)}` } : { configured: false, masked: null };
   } catch (error) {
     return { configured: false, masked: null };
   }

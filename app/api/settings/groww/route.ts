@@ -7,17 +7,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const growwToken = String(body.growwToken || '').trim();
+  const body = await request.json();
+  const growwToken = String(body.growwToken || '').trim();
 
-    if (!growwToken || growwToken.length < 10) {
-      return NextResponse.json({ message: 'Token appears invalid' }, { status: 400 });
-    }
-
-    await saveGrowwToken(growwToken);
-    return NextResponse.json({ message: 'Groww token saved securely.' }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ message: 'Unable to save token.' }, { status: 500 });
+  if (!growwToken || growwToken.length < 10) {
+    return NextResponse.json({ message: 'Token appears invalid' }, { status: 400 });
   }
+
+  await saveGrowwToken(growwToken);
+  return NextResponse.json({ message: 'Groww token saved securely.' }, { status: 200 });
 }

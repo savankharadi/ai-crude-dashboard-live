@@ -1,27 +1,43 @@
 # AI Crude Dashboard Live
 
-A live-ready Next.js dashboard for crude futures and options analysis with:
-- free WTI data tile
-- AI signal engine
+This repo contains a live-data dashboard for crude market monitoring with:
+- real-time WTI feed via Yahoo Finance CL=F
+- optional Groww token-powered market feed via a secure server route
+- AI-style buy/sell signal engine
 - event trigger panel
-- Groww access-token settings
-- shareable dashboard snapshot page
+- shareable dashboard page
+- Vercel-ready deployment
 
-## Local startup
+## Local run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000
+Then open http://localhost:3000
 
-## Environment variables
+## Required environment variables for real API usage
 
 ```bash
-FRED_API_KEY=your_key_here
 TOKEN_SECRET=your_secure_secret_here
+GROWW_TOKEN=your_groww_token_if_available
+GROWW_API_BASE_URL=https://your-groww-endpoint.example.com/market
+GROWW_MARKET_ENDPOINT=https://your-groww-endpoint.example.com/market
 ```
 
-## Deployment note
-For full server-side API support, deploy to Vercel instead of GitHub Pages. GitHub Pages is static-only and cannot run Next.js API routes.
+Notes:
+- Keep tokens out of Git. Use the app settings or Vercel environment variables.
+- Groww API integrations depend on official access and endpoint availability. The app supports a token-backed route with graceful fallback when the endpoint is unavailable.
+- For static GitHub Pages hosting, this app is not the ideal target because server-side API routes are required. For a true live app with real-time API support, deploy to Vercel.
+
+## Deploy to Vercel
+
+1. Import this repo into Vercel.
+2. Set the environment variables above.
+3. Deploy.
+4. Use the generated Vercel URL as the live application URL.
+
+## Free WTI data
+
+The WTI tile uses Yahoo Finance CL=F for near real-time data and falls back to static demo data if the provider is unavailable.
